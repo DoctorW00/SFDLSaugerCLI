@@ -1,0 +1,9 @@
+<RCC>
+    <qresource prefix="/">
+        <file>www/index.html</file>
+        <file>www/icon.ico</file>
+        <file>www/icon.png</file>
+        <file>www/404.html</file>
+        <file>www/echoclient.html</file>
+    </qresource>
+</RCC>
