@@ -14,6 +14,9 @@
 #include <QDataStream>
 #include <QFile>
 
+#include <QVector>
+#include <QStringList>
+
 class webserverthread : public QThread
 {
     Q_OBJECT
@@ -25,6 +28,8 @@ class webserverthread : public QThread
     signals:
         void error(QTcpSocket::SocketError socketerror);
         void socketError(QAbstractSocket::SocketError error);
+        void sendSFDLUploads(QVector<QStringList> sfdlUploads);
+        void clientDisconnected();
 
     public slots:
         void readyRead();

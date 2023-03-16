@@ -15,12 +15,14 @@ extern QVector<dFile> Files;
 
 websocket::websocket(QObject *parent) : QObject(parent)
 {
+    // register metatype socket error
+    qRegisterMetaType<QAbstractSocket::SocketError>("QAbstractSocket::SocketError");
 
-    /*
     updateClients = new QTimer(this);
-    connect(updateClients, SIGNAL(timeout()), this, SLOT(sendTextMessage()));
+    // connect(updateClients, SIGNAL(timeout()), this, SLOT(sendTextMessage()));
+    connect(updateClients, SIGNAL(timeout()), this, SLOT(sendTest())); // send test data to websocket clients
     updateClients->start(1000);
-    */
+
 }
 
 websocket::~websocket()
@@ -29,7 +31,6 @@ websocket::~websocket()
     qDeleteAll(_clients.begin(), _clients.end());
     delete server;
     delete socket;
-    delete client;
 }
 
 void websocket::start()
@@ -40,7 +41,7 @@ void websocket::start()
 
 void websocket::start(qint16 port)
 {
-    if(!port)
+    if(!port && port < 65535)
     {
         port = 8870;
     }
@@ -65,34 +66,48 @@ void websocket::newConnection()
 {
     socket = server->nextPendingConnection();
 
+    qDebug() << "++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++";
+    qDebug() << "WS: New client: " << QHostAddress(socket->peerAddress().toIPv4Address()).toString();
+
     connect(socket, SIGNAL(textMessageReceived(QString)), this, SLOT(textMessageReceived(QString)));
     connect(socket, SIGNAL(binaryMessageReceived(QByteArray)), this, SLOT(binaryMessageReceived(QByteArray)));
     connect(socket, SIGNAL(disconnected()), this, SLOT(disconnected()));
     connect(socket, SIGNAL(bytesWritten(qint64)), this, SLOT(bytesWritten(qint64)));
     connect(socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(serverError(QAbstractSocket::SocketError)));
-    connect(socket, SIGNAL(disconnected()), socket, SLOT(deleteLater()));
 
     _clients << socket;
 }
 
-// void websocket::sendTextMessage(QString jsonString)
+void websocket::sendTest()
+{
+    QJsonObject json;
+
+    QJsonArray servers;
+    QJsonArray s = {0, "test download", 1000};
+    servers.append(s);
+    json["servers"] = servers;
+
+    QJsonArray files;
+    QJsonArray f = {0, "test.rar", 1000};
+    files.append(f);
+    json["files"] = files;
+
+    QJsonDocument doc(json);
+    QString jsonString(doc.toJson(QJsonDocument::Compact));
+
+    for(int i = 0; i < _clients.count(); i++)
+    {
+        if(_clients.at(i)->state() == QAbstractSocket::ConnectedState)
+        {
+            qDebug() << "WS: Sending to client: " << i << jsonString;
+            _clients.at(i)->sendTextMessage(jsonString);
+        }
+    }
+}
+
 void websocket::sendTextMessage()
 {
     qDebug() << "WS: Sending text message to all clients ...";
-
-    // QString dt = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm:ss");
-
-    /*
-    QJsonObject json;
-    json["main"] = "date & time: " + dt;
-    QJsonDocument doc(json);
-    QString jsonString(doc.toJson(QJsonDocument::Compact));
-    */
-
-    /*
-    auto s = new sauger;
-    QString jsonString = s->createJson();
-    */
 
     QJsonObject json;
 

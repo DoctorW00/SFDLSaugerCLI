@@ -19,6 +19,7 @@ public slots:
     void start();
     void start(qint16 port);
     void sendTextMessage();
+    void sendTest();
 
 private slots:
     void newConnection();

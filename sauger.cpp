@@ -27,6 +27,8 @@ QVector<dFile> Files;
 
 sauger::sauger(QObject *parent) : QObject(parent)
 {
+    // auto www = new webserver;
+    // connect(www, SIGNAL(sendSFDLFile(QString)), this, SLOT(sart(QString)));
 
     // set consol size
     QPair<int, int> consolsize = returnConsolSize();
@@ -89,13 +91,34 @@ void sauger::sart()
 {
     printConsol("-> " + _SFDLFile);
 
-    auto *sfdlFile = new sfdl();
+    auto sfdlFile = new sfdl();
+    auto thread = new QThread;
 
     connect(sfdlFile, SIGNAL(sendSFDLData(QStringList,QStringList)), this, SLOT(getSFDLData(QStringList,QStringList)));
     connect(sfdlFile, SIGNAL(sendLogText(QString)), this, SLOT(printConsol(QString)));
 
     sfdlFile->setSFDL(_SFDLFile, QStringList() << _SFDLPassword);
     sfdlFile->readSFDL();
+    sfdlFile->moveToThread(thread);
+
+    thread->start();
+}
+
+void sauger::sart(QString sfdlFileName)
+{
+    printConsol("-> " + sfdlFileName);
+
+    auto sfdlFile = new sfdl();
+    auto thread = new QThread;
+
+    connect(sfdlFile, SIGNAL(sendSFDLData(QStringList,QStringList)), this, SLOT(getSFDLData(QStringList,QStringList)));
+    connect(sfdlFile, SIGNAL(sendLogText(QString)), this, SLOT(printConsol(QString)));
+
+    sfdlFile->setSFDL(sfdlFileName, QStringList() << _SFDLPassword);
+    sfdlFile->readSFDL();
+    sfdlFile->moveToThread(thread);
+
+    thread->start();
 }
 
 void sauger::receiveFTPFileIndex(int id, QStringList files)

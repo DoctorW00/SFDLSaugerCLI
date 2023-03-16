@@ -6,6 +6,10 @@
 #include "webserver.h"
 #include "websocket.h"
 
+#ifdef QT_DEBUG
+    #include <QDebug>
+#endif
+
 int main(int argc, char *argv[])
 {
     QCoreApplication a(argc, argv);
@@ -41,7 +45,7 @@ int main(int argc, char *argv[])
     parser.addOption(wwwServerOption);
 
     QCommandLineOption wwwPortOption(QStringList() << "wwwPort", QCoreApplication::translate("main", "Webserver Port (default: 8869."));
-    wwwPortOption.setValueName("wwwPortOption");
+    wwwPortOption.setValueName("wwwPort");
     parser.addOption(wwwPortOption);
 
     // Websocket server
@@ -73,24 +77,44 @@ int main(int argc, char *argv[])
     parser.process(a);
 
 
-    // auto www = new webserver();
-    // www->startServer(parser.value(wwwPortOption).toInt());
+    #ifdef QT_DEBUG
+        qDebug() << "============== DEBUG ==============>";
+
+        qDebug() << "sfdlOption: " << parser.value(sfdlOption);
+        qDebug() << "destination: " << parser.value(destinationOption);
+        qDebug() << "threadsOption: " << parser.value(threadsOption);
+        qDebug() << "forceoverwriteOption: " << parser.value(forceoverwriteOption);
+        qDebug() << "passwordOption: " << parser.value(passwordOption);
+
+        qDebug() << "wwwServerOption: " << parser.value(wwwServerOption);
+        qDebug() << "wwwPortOption: " << parser.value(wwwPortOption).toInt();
+        qDebug() << "wsServerOption: " << parser.value(wsServerOption);
+        qDebug() << "wsPortOption: " << parser.value(wsPortOption).toInt();
+
+        qDebug() << "proxyHostOption: " << parser.value(proxyHostOption);
+        qDebug() << "proxyPortOption: " << parser.value(proxyPortOption).toInt();
+        qDebug() << "proxyUserOption: " << parser.value(proxyUserOption);
+        qDebug() << "proxyPassOption: " << parser.value(proxyPassOption);
+
+        qDebug() << "<============== DEBUG ==============";
+    #endif
+
 
     bool setWebGUI = false;
 
-    // start webserver
-    if(QVariant(parser.value(wwwServerOption)).toBool())
+    // start webserver if -w is true or no sfdl file is set
+    if(QVariant(parser.value(wwwServerOption)).toBool() || parser.value(sfdlOption).isEmpty())
     {
         setWebGUI = true;
 
-        webserver www;
-        www.startServer(parser.value(wwwPortOption).toInt());
+        auto www = new webserver;
+        www->startServer(parser.value(wwwPortOption).toInt());
 
-        if(QVariant(parser.value(wsServerOption)).toBool())
-        {
-            websocket ws;
-            ws.start(parser.value(wsPortOption).toInt());
-        }
+        auto ws = new websocket;
+        ws->start(parser.value(wsPortOption).toInt());
+
+        auto sfdlsaugercli = new sauger();
+        sfdlsaugercli->connect(www, SIGNAL(sendSFDLFile(QString)), sfdlsaugercli, SLOT(sart(QString)));
     }
 
     if(!setWebGUI)
@@ -110,63 +134,6 @@ int main(int argc, char *argv[])
 
         sfdlsaugercli->sart();
     }
-
-
-    /*
-    bool setWebGUI = false;
-
-    // start webserver
-    if(QVariant(parser.value(wwwServerOption)).toBool())
-    {
-        setWebGUI = true;
-
-        // auto www = new webserver();
-        // www->start(parser.value(wwwPortOption).toInt());
-
-        // webserver www;
-        // www.startServer();
-
-        // auto www = new webserver();
-        // www->startServer();
-
-        // auto www = new webserver();
-        // www->startServer();
-
-        webserver www;
-        www.startServer();
-    }
-    */
-
-    /*
-    // start websocket server
-    if(QVariant(parser.value(wsServerOption)).toBool())
-    {
-        setWebGUI = true;
-
-        auto ws = new websocket();
-        ws->start(parser.value(wsPortOption).toInt());
-    }
-
-    auto muh = new sauger();
-
-    if(!setWebGUI)
-    {
-        muh->setData(parser.value(sfdlOption),
-                     parser.value(destinationOption),
-                     parser.value(threadsOption).toInt(),
-                     QVariant(parser.value(forceoverwriteOption)).toBool(),
-                     parser.value(passwordOption));
-
-        muh->sart();
-    }
-    */
-
-    /*
-    muh->setProxy(parser.value(proxyHostOption),
-                  parser.value(proxyPortOption).toInt(),
-                  parser.value(proxyUserOption),
-                  parser.value(proxyPassOption));
-    */
 
     return a.exec();
 }

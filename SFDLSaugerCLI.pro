@@ -31,7 +31,7 @@ HEADERS += \
 RESOURCES += \
         web.qrc
 
-VERSION = 0.1.3.8
+VERSION = 0.1.3.9
 
 QMAKE_TARGET_COMPANY = "GrafSauger"
 QMAKE_TARGET_PRODUCT = "SFDLSaugerCLI"

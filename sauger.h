@@ -15,6 +15,7 @@ public:
 
 public slots:
     void sart();
+    void sart(QString sfdlFileName);
     void setData(QString sfdlFile, QString downloadPath, int maxThreads, bool forceOverwrite, QString password);
     void setProxy(QString proxyHost, int proxyPort, QString proxyUser, QString proxyPass);
     void createJson();
