@@ -33,8 +33,8 @@ void webserver::startServer(qint16 port)
         port = 8869;
     }
 
-    if(this->listen(QHostAddress::Any, port))
-    // if(this->listen(QHostAddress("127.0.0.1"), port))
+    // if(this->listen(QHostAddress::Any, port))
+    if(this->listen(QHostAddress("127.0.0.1"), port))
     {
         qDebug() << "WWW listening @: " << this->serverAddress().toString() << ":" << port;
         openURL(port);
@@ -112,7 +112,7 @@ void webserver::handleSFDLUploads(QVector<QStringList> sfdlUploads)
 
 void webserver::openURL(qint16 port)
 {
-    QString URL = "http://127.0.0.1:" + QString::number(port) + "/";
+    QString URL = "https://127.0.0.1:" + QString::number(port) + "/";
 
     // open url in browser (if windows)
     #ifdef Q_OS_WIN

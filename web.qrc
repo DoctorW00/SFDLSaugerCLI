@@ -14,11 +14,13 @@
         <file>react/saugergui/build/robots.txt</file>
         <file>react/saugergui/build/static/css/main.073c9b0a.css</file>
         <file>react/saugergui/build/static/css/main.073c9b0a.css.map</file>
+        <file>react/saugergui/build/static/media/logo.6c424beeb4f42899b2acaf7bd068cad0.svg</file>
+        <file>cert/localhost.crt</file>
+        <file>cert/localhost.decrypted.key</file>
         <file>react/saugergui/build/static/js/787.15b3c645.chunk.js</file>
         <file>react/saugergui/build/static/js/787.15b3c645.chunk.js.map</file>
-        <file>react/saugergui/build/static/js/main.870cc73e.js</file>
-        <file>react/saugergui/build/static/js/main.870cc73e.js.LICENSE.txt</file>
-        <file>react/saugergui/build/static/js/main.870cc73e.js.map</file>
-        <file>react/saugergui/build/static/media/logo.6c424beeb4f42899b2acaf7bd068cad0.svg</file>
+        <file>react/saugergui/build/static/js/main.ae491b51.js</file>
+        <file>react/saugergui/build/static/js/main.ae491b51.js.LICENSE.txt</file>
+        <file>react/saugergui/build/static/js/main.ae491b51.js.map</file>
     </qresource>
 </RCC>

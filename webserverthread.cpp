@@ -24,7 +24,8 @@ void webserverthread::run()
         qDebug() << "WWW thread started: " << QThread::currentThreadId() << socketDescriptor;
     #endif
 
-    socket = new QTcpSocket();
+    // socket = new QTcpSocket();
+    socket = new QSslSocket;
 
     if(!socket->setSocketDescriptor(this->socketDescriptor))
     {
@@ -33,12 +34,47 @@ void webserverthread::run()
     }
 
     connect(socket, SIGNAL(readyRead()), this, SLOT(readyRead()), Qt::DirectConnection);
+    connect(socket, SIGNAL(encrypted()), this, SLOT(isencrypted()));
+
     connect(socket, SIGNAL(disconnected()), this, SLOT(disconnected()));
     connect(socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(socketError2(QAbstractSocket::SocketError)));
 
-    socket->write("HTTP/1.0 200 Ok\r\n");
-    socket->waitForBytesWritten();
-    socket->close();
+    // ssl
+    const auto certs = QSslCertificate::fromPath(QLatin1String(":/cert/localhost.crt"));
+
+    #ifdef QT_DEBUG
+        qDebug() << "WWW: Certs: " << certs << QThread::currentThreadId() << socketDescriptor;
+    #endif
+
+    if(certs.length())
+    {
+        m_sslLocalCertificate = certs.at(0);
+    }
+    socket->setLocalCertificate(m_sslLocalCertificate);
+
+    QFile keyFile(":/cert/localhost.decrypted.key");
+    if(keyFile.open(QIODevice::ReadOnly))
+    {
+        QString keyFileData = keyFile.readAll();
+        QByteArray keydata = keyFileData.toUtf8();
+
+        QSslKey key(keydata, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
+        m_sslPrivateKey = key;
+
+        keyFile.close();
+
+        #ifdef QT_DEBUG
+            qDebug() << "WWW: SSL Key: " << m_sslPrivateKey << QThread::currentThreadId() << socketDescriptor;
+        #endif
+    }
+    else
+    {
+        qDebug() << "WWW: Can't open SSL KeyFile: " << keyFile.fileName() << QThread::currentThreadId() << socketDescriptor;
+    }
+
+    socket->setPrivateKey(m_sslPrivateKey);
+    socket->setProtocol(QSsl::TlsV1_2);
+    socket->startServerEncryption();
 
     exec();
 }
@@ -47,6 +83,13 @@ void webserverthread::socketError2(QAbstractSocket::SocketError error)
 {
     #ifdef QT_DEBUG
         qDebug() << "WWW: Socket error: " << error << QThread::currentThreadId() << socketDescriptor;
+    #endif
+}
+
+void webserverthread::isencrypted()
+{
+    #ifdef QT_DEBUG
+        qDebug() << "WWW: Connection is now SSL encrypted: " << QThread::currentThreadId() << socketDescriptor;
     #endif
 }
 
@@ -116,6 +159,7 @@ void webserverthread::readyRead()
                 socket->write(mType.toUtf8() + returnFileData(loadFile));
 
                 socket->waitForBytesWritten();
+                socket->flush();
                 socket->close();
 
             }
@@ -191,6 +235,7 @@ void webserverthread::readyRead()
             socket->write(mType.toUtf8() + returnFileData(loadFile));
 
             socket->waitForBytesWritten();
+            socket->flush();
             socket->close();
 
         }

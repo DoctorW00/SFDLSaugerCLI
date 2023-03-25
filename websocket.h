@@ -35,6 +35,8 @@ private:
     QWebSocket *client;
     QList<QWebSocket *> _clients;
     QTimer *updateClients;
+    QSslCertificate m_sslLocalCertificate;
+    QSslKey m_sslPrivateKey;
 
 };
 

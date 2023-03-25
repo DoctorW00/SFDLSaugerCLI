@@ -7,6 +7,7 @@
 #include <QSslSocket>
 #include <QSslKey>
 #include <QSslError>
+#include <QSslCertificate>
 
 class webserver : public QTcpServer
 {
@@ -28,7 +29,6 @@ protected:
 
 signals:
     void sendSFDLFile(QString sfdlFile);
-
 
 };
 

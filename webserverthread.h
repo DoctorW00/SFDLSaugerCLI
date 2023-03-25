@@ -4,6 +4,9 @@
 #include <QObject>
 #include <QThread>
 #include <QTcpSocket>
+#include <QSslSocket>
+#include <QSslCertificate>
+#include <QSslKey>
 
 #ifdef QT_DEBUG
     #include <QDebug>
@@ -39,10 +42,14 @@ class webserverthread : public QThread
         void socketError2(QAbstractSocket::SocketError error);
         QByteArray returnFileData(QString filename);
         QString mimeReturn(const QFile& file);
+        void isencrypted();
 
     private:
-        QTcpSocket *socket;
+        // QTcpSocket *socket;
+        QSslSocket *socket;
         qintptr socketDescriptor;
+        QSslCertificate m_sslLocalCertificate;
+        QSslKey m_sslPrivateKey;
 };
 
 #endif // WEBSERVERTHREAD_H
