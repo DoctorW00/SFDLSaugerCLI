@@ -27,6 +27,10 @@ class webserverthread : public QThread
     public:
         explicit webserverthread(qintptr ID, QObject *parent = nullptr);
         void run();
+        void setServerBasePath(QString path);
+        void setSSLUsage(bool option);
+        void setCerFile(QString location);
+        void setKeyFile(QString location);
 
     signals:
         void error(QTcpSocket::SocketError socketerror);
@@ -36,6 +40,7 @@ class webserverthread : public QThread
 
     public slots:
         void readyRead();
+        void readyReadSSL();
         void disconnected();
 
     private slots:
@@ -43,13 +48,20 @@ class webserverthread : public QThread
         QByteArray returnFileData(QString filename);
         QString mimeReturn(const QFile& file);
         void isencrypted();
+        void readLineFromSocket(QIODevice* device);
+        void processData(QString socketData);
+        QByteArray templateReplace(QByteArray data);
 
     private:
-        // QTcpSocket *socket;
-        QSslSocket *socket;
+        QTcpSocket *socket;
+        QSslSocket *sslsocket;
         qintptr socketDescriptor;
         QSslCertificate m_sslLocalCertificate;
         QSslKey m_sslPrivateKey;
+        QString serverBasePath;
+        bool sslUsage;
+        QString sslCertFile;
+        QString sslKeyFile;
 };
 
 #endif // WEBSERVERTHREAD_H

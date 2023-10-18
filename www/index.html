@@ -1,12 +1,347 @@
-<!doctype html>
-<html>
-	<head>
-        <title>SFDLSaugerCLI WebGUI</title>
-		<link rel="icon" type="image/x-icon" href=":/www/icon.ico">
-	</head>
-	<body>
-		<h3>SFDLSaugerCLI WebGUI</h3>
-		<h1>Das ist ein Test!</h1>
-        <img src=":/www/icon.png">
-	</body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{#appName}}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #282828;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+            color: #c6c6c6;
+        }
+
+        .container {
+            max-width: 999px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #c0c0c0;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+
+        input[type="text"], button {
+            width: 400px;
+            padding: 10px;
+            margin: 10px;
+        }
+
+        button {
+            background-color: #007bff;
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            width: 120px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        #output {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        .data-box {
+            width: 98%;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .progress-bar {
+            width: 70%;
+            background-color: #ddd;
+            border-radius: 5px;
+        }
+
+        .progress {
+            width: 0;
+            height: 20px;
+            background-color: #007bff;
+            border-radius: 5px;
+        }
+
+        .checkbox {
+            margin-right: 10px;
+        }
+
+        textarea {
+            width: 98%;
+            height: 500px;
+            padding: 10px;
+            resize: true;
+            background-color: #dddddd;
+        }
+		
+		.tab-button {
+            background-color: #ccc;
+            border: 1px solid #888;
+            padding: 5px 10px;
+            cursor: pointer;
+			margin: 0 0 10px 0;
+        }
+
+        .tab-button.active {
+            background-color: #007bff;
+            color: #fff;
+        }
+
+        .tab-contents {
+            display: none;
+        }
+
+        .tab-contents.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>{{#appName}} v{{#appVersion}}</h1>
+    <div class="container">
+		<div style="text-align: center;">
+			<input type="text" id="commandInput" placeholder="Enter command">
+            <button id="sendButton">Send</button>
+		</div>
+	
+        <textarea id="log" readonly></textarea>
+		
+        <div style="text-align: center;">
+			<button id="exitButton">Shut down</button>
+			<button id="stopButton">Stop downloads</button>
+			<button id="startButton">Start downloads</button>
+			<br />
+			<input type="file" id="xmlFileInput" accept=".sfdl, .SFDL" onchange="updateFileName(this)">
+			<button id="sendXmlButton">Upload SFDL</button>
+        </div>
+        <div id="tabs"></div>
+        <div id="tabContents"></div>
+    </div>
+
+    <script>
+        const socket = new WebSocket('{{#websocket}}://127.0.0.1:8870');
+        const commandInput = document.getElementById('commandInput');
+        const sendButton = document.getElementById('sendButton');
+        const log = document.getElementById('log');
+        const exitButton = document.getElementById('exitButton');
+		const stopButton = document.getElementById('stopButton');
+		const startButton = document.getElementById('startButton');
+        const tabsDiv = document.getElementById('tabs');
+        const tabContentsDiv = document.getElementById('tabContents');
+		const accessToken = localStorage.getItem('accessToken');
+		const refreshToken = localStorage.getItem('refreshToken');
+
+        socket.addEventListener('open', (event) => {
+            addMessageToLog('Connected');
+        });
+
+        socket.addEventListener('close', (event) => {
+            addMessageToLog('Connection closed');
+        });
+
+        socket.addEventListener('message', (event) => {
+            const rawData = event.data;
+            addMessageToLog(`Server (Raw Data): ${rawData}`);
+            try {
+                const data = JSON.parse(rawData);
+                updateTabs(data.servers, data.files);
+                scrollOutputToBottom();
+            } catch (error) {
+                addMessageToLog('Error parsing JSON data');
+            }
+        });
+
+        sendButton.addEventListener('click', () => {
+            const command = commandInput.value;
+            socket.send(command);
+            commandInput.value = '';
+        });
+
+        exitButton.addEventListener('click', () => {
+            const shutdownCommand = 'shutdown';
+            socket.send(shutdownCommand);
+        });
+		
+		stopButton.addEventListener('click', () => {
+            const message = {
+				action: 'stop'
+			};
+
+			socket.send(JSON.stringify(message));
+        });
+		
+		startButton.addEventListener('click', () => {
+            const message = {
+				action: 'start'
+			};
+
+			socket.send(JSON.stringify(message));
+        });
+
+        function addMessageToLog(messageText) {
+            log.value += `${messageText}\n`;
+        }
+
+        function scrollOutputToBottom() {
+            log.scrollTop = log.scrollHeight;
+        }
+
+        let selectedServer = null;
+
+		function updateTabs(servers, files) {
+			removeAllChildNodes(tabsDiv);
+			removeAllChildNodes(tabContentsDiv);
+
+			servers.forEach((server, index) => {
+				const tabButton = document.createElement('div');
+				tabButton.classList.add('tab-button');
+				if (selectedServer === null && index === 0) {
+					tabButton.classList.add('active');
+					selectedServer = server;
+				} else if (selectedServer && server.id === selectedServer.id) {
+					tabButton.classList.add('active');
+				}
+				tabButton.textContent = server.name;
+				tabButton.addEventListener('click', () => {
+					showFilesForServer(server, files);
+					selectedServer = server;
+					activateTab(index);
+				});
+
+				tabsDiv.appendChild(tabButton);
+			});
+
+			if (selectedServer !== null) {
+				showFilesForServer(selectedServer, files);
+			}
+		}
+
+        function showFilesForServer(server, files) {
+			removeAllChildNodes(tabContentsDiv);
+
+			const serverId = server.id;
+			const filesForServer = serverFiles(serverId, files);
+
+			filesForServer.forEach(file => {
+				const div = document.createElement('div');
+				div.classList.add('data-box');
+				div.innerHTML = `
+					<input type="checkbox" class="checkbox" id="checkbox-${file.id}" ${file.selected ? 'checked' : ''}>
+					<p>ID: ${file.id}</p>
+					<p>File Name: ${file.fileName}</p>
+					<div class="progress-bar">
+						<div class="progress" style="width: ${file.progress}%;"></div>
+					</div>
+					<p>Status: ${file.status === 1 ? 'In Progress' : 'Completed'}</p>
+				`;
+				tabContentsDiv.appendChild(div);
+
+				const checkbox = document.getElementById(`checkbox-${file.id}`);
+				checkbox.addEventListener('change', () => {
+					const checkboxId = file.id;
+					const isChecked = checkbox.checked;
+					sendCheckboxStatusToServer(checkboxId, isChecked);
+				});
+			});
+		}
+
+
+		function serverFiles(serverId, files) {
+			return files.filter(file => file.dServerID === serverId);
+		}
+
+
+
+        function removeAllChildNodes(parent) {
+            while (parent.firstChild) {
+                parent.removeChild(parent.firstChild);
+            }
+        }
+
+        function activateTab(tabIndex) {
+            const tabButtons = tabsDiv.querySelectorAll('.tab-button');
+            const tabContents = tabContentsDiv.querySelectorAll('.tab-contents');
+
+            tabButtons.forEach((button, index) => {
+                if (index === tabIndex) {
+                    button.classList.add('active');
+                    tabContents[index].classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                    tabContents[index].classList.remove('active');
+                }
+            });
+        }
+
+        function sendCheckboxStatusToServer(checkboxId, isChecked) {
+            const message = {
+                action: isChecked ? 'check' : 'uncheck',
+                id: checkboxId
+            };
+            socket.send(JSON.stringify(message));
+        }
+		
+		const xmlFileInput = document.getElementById('xmlFileInput');
+		const sendXmlButton = document.getElementById('sendXmlButton');
+
+		let selectedFileName = null;
+
+		function updateFileName(input) {
+			if (input.files.length > 0) {
+				selectedFileName = input.files[0].name;
+			} else {
+				selectedFileName = null;
+			}
+		}
+
+		sendXmlButton.addEventListener('click', () => {
+			const file = xmlFileInput.files[0];
+
+			if (file) {
+				const reader = new FileReader();
+
+				reader.onload = (event) => {
+					const xmlContent = event.target.result;
+					if (selectedFileName) {
+						sendXmlToServer(xmlContent, selectedFileName);
+					} else {
+						alert('Please select a file before sending.');
+					}
+				};
+
+				reader.readAsText(file);
+			} else {
+				alert('Please select a file before sending.');
+			}
+		});
+
+		function sendXmlToServer(xmlContent, fileName) {
+			const message = {
+				action: 'send-sfdl',
+				filename: fileName,
+				xml: xmlContent
+			};
+
+			socket.send(JSON.stringify(message));
+
+			// Leere das Datei-Eingabefeld und die ausgewählte Datei
+			xmlFileInput.value = '';
+			selectedFileName = null;
+		}
+
+
+    </script>
+</body>
 </html>

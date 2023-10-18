@@ -1,6 +1,8 @@
 #include "sfdl.h"
 
-#include <QDebug>
+#ifdef QT_DEBUG
+    #include <QDebug>
+#endif
 
 #include <QCryptographicHash>
 #include <qaesencryption.h>
@@ -127,13 +129,13 @@ void sfdl::readSFDL()
     Encrypted = ListElements(root, "Encrypted");
     MaxDownloadThreads = ListElements(root, "MaxDownloadThreads");
 
-
-    qDebug() << "Description: " << Description;
-    qDebug() << "Uploader: " << Uploader;
-    qDebug() << "SFDLFileVersion: " << SFDLFileVersion;
-    qDebug() << "Encrypted: " << Encrypted;
-    qDebug() << "MaxDownloadThreads: " << MaxDownloadThreads;
-
+    #ifdef QT_DEBUG
+        qDebug() << "Description: " << Description;
+        qDebug() << "Uploader: " << Uploader;
+        qDebug() << "SFDLFileVersion: " << SFDLFileVersion;
+        qDebug() << "Encrypted: " << Encrypted;
+        qDebug() << "MaxDownloadThreads: " << MaxDownloadThreads;
+    #endif
 
     n_data.append("Description|" + Description);
     n_data.append("Uploader|" + Uploader);
@@ -189,29 +191,33 @@ void sfdl::readSFDL()
     }
 
 
-    qDebug() << "Name: " << Name;
-    qDebug() << "Host: " << Host;
-    qDebug() << "Port: " << Port;
-    qDebug() << "Username: " << Username;
-    qDebug() << "Password: " << Password;
-    qDebug() << "AuthRequired: " << AuthRequired;
+    #ifdef QT_DEBUG
+        qDebug() << "SFDL raw data:";
+        qDebug() << "Name: " << Name;
+        qDebug() << "Host: " << Host;
+        qDebug() << "Port: " << Port;
+        qDebug() << "Username: " << Username;
+        qDebug() << "Password: " << Password;
+        qDebug() << "AuthRequired: " << AuthRequired;
 
-    qDebug() << "DataConnectionType: " << DataConnectionType;
-    qDebug() << "DataType: " << DataType;
-    qDebug() << "CharacterEncoding: " << CharacterEncoding;
-    qDebug() << "EncryptionMode: " << EncryptionMode;
-    qDebug() << "ListMethod: " << ListMethod;
-    qDebug() << "DefaultPath: " << DefaultPath;
-    qDebug() << "ForceSingleConnection: " << ForceSingleConnection;
-    qDebug() << "DataStaleDetection: " << DataStaleDetection;
-    qDebug() << "SpecialServerMode: " << SpecialServerMode;
-
+        qDebug() << "DataConnectionType: " << DataConnectionType;
+        qDebug() << "DataType: " << DataType;
+        qDebug() << "CharacterEncoding: " << CharacterEncoding;
+        qDebug() << "EncryptionMode: " << EncryptionMode;
+        qDebug() << "ListMethod: " << ListMethod;
+        qDebug() << "DefaultPath: " << DefaultPath;
+        qDebug() << "ForceSingleConnection: " << ForceSingleConnection;
+        qDebug() << "DataStaleDetection: " << DataStaleDetection;
+        qDebug() << "SpecialServerMode: " << SpecialServerMode;
+        qDebug() << "------------------------------------------";
+    #endif
 
 
     if(Description.isEmpty() || Host.isEmpty() || !Port)
     {
-        // sendLogText("<font color=\"red\">" + file + tr(": Unzureichende Daten in SFDL Datei! Kein Download möglich.</font>"));
-        qDebug() << "Unzureichende Daten in SFDL Datei! Kein Download möglich: " << file;
+        #ifdef QT_DEBUG
+            qDebug() << "SFDL Error: No description, host or port found ... " << file;
+        #endif
         return;
     }
 
@@ -271,7 +277,7 @@ void sfdl::readSFDL()
         }
 
         // sendLogText(file + tr(": Erfogreich mit Passwort <b>") + sfdlPassword + tr("</b> entschlüsselt."));
-        qDebug() << "Erfogreich mit Passwort " + sfdlPassword + " entschlüsselt." << file;
+        // qDebug() << "Erfogreich mit Passwort " + sfdlPassword + " entschlüsselt." << file;
 
         for(int i = 0; i < n_data.count(); i++)
         {

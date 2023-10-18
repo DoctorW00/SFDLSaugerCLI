@@ -16,65 +16,121 @@ webserverthread::webserverthread(qintptr ID, QObject *parent) : QThread(parent)
     this->socketDescriptor = ID;
 }
 
+void webserverthread::setServerBasePath(QString path)
+{
+    serverBasePath = path;
+
+    if(!serverBasePath.endsWith("/"))
+    {
+        serverBasePath.append("/");
+    }
+}
+
+void webserverthread::setSSLUsage(bool option)
+{
+    sslUsage = option;
+}
+
+void webserverthread::setCerFile(QString location)
+{
+    sslCertFile = location;
+}
+
+void webserverthread::setKeyFile(QString location)
+{
+    sslKeyFile = location;
+}
+
 void webserverthread::run()
 {
     socketDescriptor = this->socketDescriptor;
 
     #ifdef QT_DEBUG
         qDebug() << "WWW thread started: " << QThread::currentThreadId() << socketDescriptor;
+        qDebug() << "WWW thread ssl usage: " << sslUsage;
+        qDebug() << "WWW thread server base path: " << serverBasePath;
     #endif
 
     // socket = new QTcpSocket();
-    socket = new QSslSocket;
+    // socket = new QSslSocket;
 
-    if(!socket->setSocketDescriptor(this->socketDescriptor))
+    if(sslUsage == true)
     {
-        emit error(socket->error());
-        return;
-    }
+        if(sslCertFile.isEmpty())
+        {
+            sslCertFile = ":/cert/localhost.crt";
+        }
 
-    connect(socket, SIGNAL(readyRead()), this, SLOT(readyRead()), Qt::DirectConnection);
-    connect(socket, SIGNAL(encrypted()), this, SLOT(isencrypted()));
+        if(sslKeyFile.isEmpty())
+        {
+            sslKeyFile = ":/cert/localhost.decrypted.key";
+        }
 
-    connect(socket, SIGNAL(disconnected()), this, SLOT(disconnected()));
-    connect(socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(socketError2(QAbstractSocket::SocketError)));
+        sslsocket = new QSslSocket;
 
-    // ssl
-    const auto certs = QSslCertificate::fromPath(QLatin1String(":/cert/localhost.crt"));
+        if(!sslsocket->setSocketDescriptor(this->socketDescriptor))
+        {
+            emit error(sslsocket->error());
+            return;
+        }
 
-    #ifdef QT_DEBUG
-        qDebug() << "WWW: Certs: " << certs << QThread::currentThreadId() << socketDescriptor;
-    #endif
+        connect(sslsocket, SIGNAL(readyRead()), this, SLOT(readyReadSSL()), Qt::DirectConnection);
+        connect(sslsocket, SIGNAL(encrypted()), this, SLOT(isencrypted()));
+        connect(sslsocket, SIGNAL(disconnected()), this, SLOT(disconnected()));
+        connect(sslsocket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(socketError2(QAbstractSocket::SocketError)));
 
-    if(certs.length())
-    {
-        m_sslLocalCertificate = certs.at(0);
-    }
-    socket->setLocalCertificate(m_sslLocalCertificate);
-
-    QFile keyFile(":/cert/localhost.decrypted.key");
-    if(keyFile.open(QIODevice::ReadOnly))
-    {
-        QString keyFileData = keyFile.readAll();
-        QByteArray keydata = keyFileData.toUtf8();
-
-        QSslKey key(keydata, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
-        m_sslPrivateKey = key;
-
-        keyFile.close();
+        // const auto certs = QSslCertificate::fromPath(QLatin1String(":/cert/localhost.crt"));
+        const auto certs = QSslCertificate::fromPath(QLatin1String(sslCertFile.toLatin1()));
 
         #ifdef QT_DEBUG
-            qDebug() << "WWW: SSL Key: " << m_sslPrivateKey << QThread::currentThreadId() << socketDescriptor;
+            qDebug() << "WWW: Certs: " << certs << QThread::currentThreadId() << socketDescriptor;
         #endif
+
+        if(certs.length())
+        {
+            m_sslLocalCertificate = certs.at(0);
+        }
+        sslsocket->setLocalCertificate(m_sslLocalCertificate);
+
+        // QFile keyFile(":/cert/localhost.decrypted.key");
+        QFile keyFile(sslKeyFile);
+        if(keyFile.open(QIODevice::ReadOnly))
+        {
+            QString keyFileData = keyFile.readAll();
+            QByteArray keydata = keyFileData.toUtf8();
+
+            QSslKey key(keydata, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey);
+            m_sslPrivateKey = key;
+
+            keyFile.close();
+
+            #ifdef QT_DEBUG
+                qDebug() << "WWW: SSL Key: " << m_sslPrivateKey << QThread::currentThreadId() << socketDescriptor;
+            #endif
+        }
+        else
+        {
+            qDebug() << "WWW: Can't open SSL KeyFile: " << keyFile.fileName() << QThread::currentThreadId() << socketDescriptor;
+        }
+
+        sslsocket->setPrivateKey(m_sslPrivateKey);
+        sslsocket->setProtocol(QSsl::TlsV1_2);
+        sslsocket->startServerEncryption();
     }
     else
     {
-        qDebug() << "WWW: Can't open SSL KeyFile: " << keyFile.fileName() << QThread::currentThreadId() << socketDescriptor;
-    }
+        socket = new QTcpSocket();
 
-    socket->setPrivateKey(m_sslPrivateKey);
-    socket->setProtocol(QSsl::TlsV1_2);
-    socket->startServerEncryption();
+        if(!socket->setSocketDescriptor(this->socketDescriptor))
+        {
+            emit error(socket->error());
+            return;
+        }
+
+        connect(socket, SIGNAL(readyRead()), this, SLOT(readyRead()), Qt::DirectConnection);
+        connect(socket, SIGNAL(disconnected()), this, SLOT(disconnected()));
+        connect(socket, SIGNAL(error(QAbstractSocket::SocketError)), this, SLOT(socketError2(QAbstractSocket::SocketError)));
+    }
 
     exec();
 }
@@ -96,115 +152,69 @@ void webserverthread::isencrypted()
 void webserverthread::readyRead()
 {
     #ifdef QT_DEBUG
-        qDebug() << "WWW thread ready to read! " << QThread::currentThreadId() << socketDescriptor;
+        qDebug() << "WWW thread ready to read (no ssl)! " << QThread::currentThreadId() << socketDescriptor;
     #endif
 
-    if(socket->canReadLine())
+    readLineFromSocket(socket);
+}
+
+void webserverthread::readyReadSSL()
+{
+    #ifdef QT_DEBUG
+        qDebug() << "WWW thread ready to read (ssl)! " << QThread::currentThreadId() << socketDescriptor;
+    #endif
+
+    readLineFromSocket(sslsocket);
+}
+
+void webserverthread::processData(QString socketData)
+{
+    QString wwwRootPath;
+
+    if(!serverBasePath.isEmpty())
     {
-        QString socketData;
-        while (socket->canReadLine())
+        wwwRootPath = serverBasePath;
+    }
+    else
+    {
+        // wwwRootPath = ":/webui/build/";
+        wwwRootPath = ":/www/";
+    }
+
+    #ifdef QT_DEBUG
+        qDebug() << "WWW ReadLine RawData: " << socketData;
+    #endif
+
+    QStringList headerItems = QString(socketData).split(QRegExp("\r\n"));
+    QStringList tokens = QString(headerItems[0]).split(QRegExp("[ \r\n][ \r\n]*"));
+
+    if(tokens[0] == "GET")
+    {
+        if(tokens[1] == "/")
         {
-            socketData += socket->readLine();
-        }
+            // QString loadFile(":/www/index.html");
+            // QString loadFile(":/react/saugergui/build/index.html");
+            // QString loadFile(":/webui/build/index.html");
 
-        #ifdef QT_DEBUG
-            qDebug() << "WWW ReadLine RawData: " << socketData;
-        #endif
+            QString loadFile(wwwRootPath + "index.html");
 
-        QStringList headerItems = QString(socketData).split(QRegExp("\r\n"));
-        QStringList tokens = QString(headerItems[0]).split(QRegExp("[ \r\n][ \r\n]*"));
+            QString mType = mimeReturn(loadFile);
 
-        if(tokens[0] == "GET")
-        {
-            if(tokens[1] == "/")
+            if(sslUsage == true)
             {
-                // QString loadFile(":/www/index.html");
-                QString loadFile(":/react/saugergui/build/index.html");
-                QString mType = mimeReturn(loadFile);
-
-                socket->write(mType.toUtf8() + returnFileData(loadFile));
-
-                socket->waitForBytesWritten();
-                socket->close();
+                sslsocket->write(mType.toUtf8() + returnFileData(loadFile));
+                sslsocket->waitForBytesWritten();
+                sslsocket->close();
             }
             else
             {
-                QString loadFile = tokens[1];
-
-                if(loadFile.startsWith("/:/"))
-                {
-                    loadFile.remove(0,1);
-                }
-                else
-                {
-                    // loadFile = ":/www" + loadFile;
-                    loadFile = ":/react/saugergui/build" + loadFile;
-
-                    #ifdef QT_DEBUG
-                        qDebug() << "WWW (GET) loadFile: " << loadFile << QThread::currentThreadId() << socketDescriptor;
-                    #endif
-                }
-
-                QFile chkFile(loadFile);
-                if(!chkFile.exists())
-                {
-                    loadFile = ":/www/404.html";
-
-                    #ifdef QT_DEBUG
-                        qDebug() << "WWW (GET) loadFile not found 4040: " << loadFile << QThread::currentThreadId() << socketDescriptor;
-                    #endif
-                }
-
-                QString mType = mimeReturn(loadFile);
                 socket->write(mType.toUtf8() + returnFileData(loadFile));
-
                 socket->waitForBytesWritten();
-                socket->flush();
                 socket->close();
-
             }
         }
-
-        if(tokens[0] == "POST")
+        else
         {
-            #ifdef QT_DEBUG
-                qDebug() << "WWW (POST) tokens[0]: " << tokens[0] << QThread::currentThreadId() << socketDescriptor;
-            #endif
-
-            QVector<QStringList> sfdlUploads;
-            QStringList sfdlData;
-
-            for(int i = 0; i < headerItems.count(); i++)
-            {
-                if(QString(headerItems[i]).startsWith("Content-Disposition"))
-                {
-                    QRegularExpression re(".*filename=\"(.*)\"");
-                    QRegularExpressionMatch match = re.match(QString(headerItems[i]));
-
-                    if(match.hasMatch())
-                    {
-                        sfdlData.append(match.captured(1));
-                    }
-                }
-
-                if(QString(headerItems[i]).startsWith("<?xml"))
-                {
-                    sfdlData.append(QString(headerItems[i]));
-                }
-
-                if(sfdlData.count() == 2)
-                {
-                    sfdlUploads.append(sfdlData);
-                    sfdlData.clear();
-                }
-            }
-
-            if(sfdlUploads.length())
-            {
-                sendSFDLUploads(sfdlUploads);
-            }
-
-
             QString loadFile = tokens[1];
 
             if(loadFile.startsWith("/:/"))
@@ -214,31 +224,144 @@ void webserverthread::readyRead()
             else
             {
                 // loadFile = ":/www" + loadFile;
-                loadFile = ":/react/saugergui/build" + loadFile;
+                // loadFile = ":/react/saugergui/build" + loadFile;
+                // loadFile = ":/webui/build" + loadFile;
+                loadFile = wwwRootPath + loadFile;
 
                 #ifdef QT_DEBUG
-                    qDebug() << "WWW (POST) loadFile: " << loadFile << QThread::currentThreadId() << socketDescriptor;
+                    qDebug() << "WWW (GET) loadFile: " << loadFile << QThread::currentThreadId() << socketDescriptor;
                 #endif
             }
 
             QFile chkFile(loadFile);
             if(!chkFile.exists())
             {
-                loadFile = ":/www/404.html";
+                // loadFile = ":/www/404.html";
+                loadFile = wwwRootPath + "404.html";
 
                 #ifdef QT_DEBUG
-                    qDebug() << "WWW (POST) loadFile not found 4040: " << loadFile << QThread::currentThreadId() << socketDescriptor;
+                    qDebug() << "WWW (GET) loadFile not found 4040: " << loadFile << QThread::currentThreadId() << socketDescriptor;
                 #endif
             }
 
             QString mType = mimeReturn(loadFile);
-            socket->write(mType.toUtf8() + returnFileData(loadFile));
 
+            if(sslUsage == true)
+            {
+                sslsocket->write(mType.toUtf8() + returnFileData(loadFile));
+                sslsocket->waitForBytesWritten();
+                sslsocket->flush();
+                sslsocket->close();
+            }
+            else
+            {
+                socket->write(mType.toUtf8() + returnFileData(loadFile));
+                socket->waitForBytesWritten();
+                socket->flush();
+                socket->close();
+            }
+        }
+    }
+
+    if(tokens[0] == "POST")
+    {
+        #ifdef QT_DEBUG
+            qDebug() << "WWW (POST) tokens[0]: " << tokens[0] << QThread::currentThreadId() << socketDescriptor;
+        #endif
+
+        QVector<QStringList> sfdlUploads;
+        QStringList sfdlData;
+
+        for(int i = 0; i < headerItems.count(); i++)
+        {
+            if(QString(headerItems[i]).startsWith("Content-Disposition"))
+            {
+                QRegularExpression re(".*filename=\"(.*)\"");
+                QRegularExpressionMatch match = re.match(QString(headerItems[i]));
+
+                if(match.hasMatch())
+                {
+                    sfdlData.append(match.captured(1));
+                }
+            }
+
+            if(QString(headerItems[i]).startsWith("<?xml"))
+            {
+                sfdlData.append(QString(headerItems[i]));
+            }
+
+            if(sfdlData.count() == 2)
+            {
+                sfdlUploads.append(sfdlData);
+                sfdlData.clear();
+            }
+        }
+
+        if(sfdlUploads.length())
+        {
+            sendSFDLUploads(sfdlUploads);
+        }
+
+
+        QString loadFile = tokens[1];
+
+        if(loadFile.startsWith("/:/"))
+        {
+            loadFile.remove(0,1);
+        }
+        else
+        {
+            // loadFile = ":/www" + loadFile;
+            // loadFile = ":/react/saugergui/build" + loadFile;
+            // loadFile = ":/webui/build" + loadFile;
+            loadFile = wwwRootPath + loadFile;
+
+            #ifdef QT_DEBUG
+                qDebug() << "WWW (POST) loadFile: " << loadFile << QThread::currentThreadId() << socketDescriptor;
+            #endif
+        }
+
+        QFile chkFile(loadFile);
+        if(!chkFile.exists())
+        {
+            // loadFile = ":/www/404.html";
+            loadFile = wwwRootPath + "404.html";
+
+            #ifdef QT_DEBUG
+                qDebug() << "WWW (POST) loadFile not found 4040: " << loadFile << QThread::currentThreadId() << socketDescriptor;
+            #endif
+        }
+
+        QString mType = mimeReturn(loadFile);
+
+        if(sslUsage == true)
+        {
+            sslsocket->write(mType.toUtf8() + returnFileData(loadFile));
+            sslsocket->waitForBytesWritten();
+            sslsocket->flush();
+            sslsocket->close();
+        }
+        else
+        {
+            socket->write(mType.toUtf8() + returnFileData(loadFile));
             socket->waitForBytesWritten();
             socket->flush();
             socket->close();
-
         }
+    }
+}
+
+void webserverthread::readLineFromSocket(QIODevice* device)
+{
+    if (device == socket && socket->canReadLine())
+    {
+        QString line = socket->readLine();
+        processData(line);
+    }
+    else if (device == sslsocket && sslsocket->canReadLine())
+    {
+        QString line = sslsocket->readLine();
+        processData(line);
     }
 }
 
@@ -246,18 +369,28 @@ void webserverthread::disconnected()
 {
     #ifdef QT_DEBUG
         qDebug() << "WWW client disconnected: " << QThread::currentThreadId() << socketDescriptor;
-    #endif
-
-    if(socket->isOpen())
-    {
-        socket->close();
-    }
-
-    #ifdef QT_DEBUG
         qDebug() << "WWW thread deleting: " << QThread::currentThreadId();
     #endif
 
-    socket->deleteLater();
+    if(sslUsage == true)
+    {
+        if(sslsocket->isOpen())
+        {
+            sslsocket->close();
+        }
+
+        sslsocket->deleteLater();
+    }
+    else
+    {
+        if(socket->isOpen())
+        {
+            socket->close();
+        }
+
+        socket->deleteLater();
+    }
+
     exit(0);
 }
 
@@ -278,11 +411,43 @@ QByteArray webserverthread::returnFileData(QString filename)
 
     file.close();
 
-    return textOut;
+    return templateReplace(textOut);
+}
+
+// some basic template stuff
+QByteArray webserverthread::templateReplace(QByteArray data)
+{
+    // set app name
+    data.replace("{{#appName}}", QString(APP_PRODUCT).toUtf8());
+    data.replace("{{#appVersion}}", QString(APP_VERSION).toUtf8());
+
+    // set the correct websocket
+    if(sslUsage == true)
+    {
+        data.replace("{{#websocket}}", "wss");
+    }
+    else
+    {
+        data.replace("{{#websocket}}", "ws");
+    }
+
+    return data;
 }
 
 QString webserverthread::mimeReturn(const QFile& file)
 {
+    QString wwwRootPath;
+
+    if(!serverBasePath.isEmpty())
+    {
+        wwwRootPath = serverBasePath;
+    }
+    else
+    {
+        // wwwRootPath = ":/webui/build/";
+        wwwRootPath = ":/www/";
+    }
+
     QMimeDatabase mimeDatabase;
     QMimeType mimeType;
 
@@ -290,7 +455,8 @@ QString webserverthread::mimeReturn(const QFile& file)
 
     QString returnString = QString();
 
-    if(QFileInfo(file).absoluteFilePath() == ":/www/404.html")
+    // if(QFileInfo(file).absoluteFilePath() == ":/www/404.html")
+    if(QFileInfo(file).absoluteFilePath() == wwwRootPath + "404.html")
     {
         returnString = "HTTP/1.0 404 Not Found\r\nContent-Type: text/html; charset=\"utf-8\"\r\n\r\n";
     }

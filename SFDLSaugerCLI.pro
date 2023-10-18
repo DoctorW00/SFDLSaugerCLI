@@ -15,7 +15,8 @@ SOURCES += \
         sauger.cpp \
         webserver.cpp \
         websocket.cpp \
-        webserverthread.cpp
+        webserverthread.cpp \
+        jsonwebtoken.cpp
 
 HEADERS += \
         sfdl.h \
@@ -26,12 +27,13 @@ HEADERS += \
         webserver.h \
         websocket.h \
         global.h \
-        webserverthread.h
+        webserverthread.h \
+        jsonwebtoken.h
 
 RESOURCES += \
         web.qrc
 
-VERSION = 0.1.4.2
+VERSION = 0.1.7.16
 
 QMAKE_TARGET_COMPANY = "GrafSauger"
 QMAKE_TARGET_PRODUCT = "SFDLSaugerCLI"

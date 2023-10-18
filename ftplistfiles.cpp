@@ -67,8 +67,13 @@ void FTPListFiles::ftpTimeout()
     ftp->close();
     ftp->deleteLater();
 
-    sendLogText(tr("<font color=\"red\">[") + baseSFDL + tr("] FTP Timeout! Keine Verbindung zum Server.</font>"));
-    sendWarning(tr("FTP Timeout"), "[" + baseSFDL + "] FTP Timeout! Keine Verbindung zum Server.");
+    // sendLogText(tr("<font color=\"red\">[") + baseServerID + tr("] FTP Timeout! Keine Verbindung zum Server.</font>"));
+    // sendWarning(tr("FTP Timeout"), "[" + baseServerID + "] FTP Timeout! Keine Verbindung zum Server.");
+    sendErrorMsg("(" + baseServerID + tr(") FTP Timeout!"));
+
+    #ifdef QT_DEBUG
+        qDebug() << baseServerID << ": ftp Timeout!";
+    #endif
 
     delete ftp;
     setFTP();
@@ -79,7 +84,7 @@ void FTPListFiles::ftpstateChanged(int state)
     state;
 
 #ifdef QT_DEBUG
-    qDebug() << "ftpstateChanged: " << state;
+    qDebug() << baseServerID << ": ftpstateChanged: " << state;
 #endif
 }
 
@@ -89,7 +94,7 @@ void FTPListFiles::ftpRawCommandReply(int code, const QString & cmd)
     cmd;
 
 #ifdef QT_DEBUG
-    qDebug() << "ftpRawCommandReply: " << code << cmd;
+    qDebug() << baseServerID << ": ftpRawCommandReply: " << code << cmd;
 #endif
 }
 
@@ -101,42 +106,42 @@ void FTPListFiles::ftpCommandStarted(int id)
     if(id == 0)
     {
         #ifdef QT_DEBUG
-            qDebug() << "ftp commandStarted (Unconnected) id: " << id;
+            qDebug() << baseServerID << ": ftp commandStarted (Unconnected) id: " << id;
         #endif
     }
 
     if(id == 1)
     {
         #ifdef QT_DEBUG
-            qDebug() << "ftp commandStarted (HostLookup) id: " << id;
+            qDebug() << baseServerID << ": ftp commandStarted (HostLookup) id: " << id;
         #endif
     }
 
     if(id == 2)
     {
         #ifdef QT_DEBUG
-            qDebug() << "ftp commandStarted (Connecting) id: " << id;
+            qDebug() << baseServerID << ": ftp commandStarted (Connecting) id: " << id;
         #endif
     }
 
     if(id == 3)
     {
         #ifdef QT_DEBUG
-            qDebug() << "ftp commandStarted (Connected) id: " << id;
+            qDebug() << baseServerID << ": ftp commandStarted (Connected) id: " << id;
         #endif
     }
 
     if(id == 4)
     {
         #ifdef QT_DEBUG
-            qDebug() << "ftp commandStarted (LoggedIn) id: " << id;
+            qDebug() << baseServerID << ": ftp commandStarted (LoggedIn) id: " << id;
         #endif
     }
 
     if(id == 5)
     {
         #ifdef QT_DEBUG
-            qDebug() << "ftp commandStarted (Closing) id: " << id;
+            qDebug() << baseServerID << ": ftp commandStarted (Closing) id: " << id;
         #endif
     }
 #endif
@@ -149,10 +154,8 @@ void FTPListFiles::ftpCommandFinished(int, bool error)
         if(error)
         {
             #ifdef QT_DEBUG
-                qDebug() << "ftp ConnectToHost error: " << error;
+                qDebug() << baseServerID << ": ftp ConnectToHost error: " << error;
             #endif
-
-            sendLogText(tr("<font color=\"red\">[") + baseSFDL + tr("] FTP Fehler: Verbindung zum Server fehlgeschalgen!</font>"));
         }
     }
 
@@ -163,8 +166,6 @@ void FTPListFiles::ftpCommandFinished(int, bool error)
             #ifdef QT_DEBUG
                 qDebug() << "ftp Login error: " << error;
             #endif
-
-            sendLogText(tr("<font color=\"red\">[") + baseSFDL + tr("] FTP Fehler: Login fehlgeschalgen!</font>"));
         }
     }
 
@@ -175,8 +176,6 @@ void FTPListFiles::ftpCommandFinished(int, bool error)
             #ifdef QT_DEBUG
                 qDebug() << "ftp Get error: " << error;
             #endif
-
-            sendLogText(tr("<font color=\"red\">[") + baseSFDL + tr("] FTP Fehler: Datei GET fehlgeschalgen!</font>"));
         }
     }
 
@@ -187,8 +186,6 @@ void FTPListFiles::ftpCommandFinished(int, bool error)
             #ifdef QT_DEBUG
                 qDebug() << "ftp List error: " << error;
             #endif
-
-            sendLogText(tr("<font color=\"red\">[") + baseSFDL + tr("] FTP Fehler: Datei Listing fehlgeschalgen!</font>"));
         }
     }
 }
@@ -254,9 +251,10 @@ void FTPListFiles::getFTPIndex(QString ip, int port, QString user, QString pass,
     basePath = path;
 
     // sendLogText(baseSFDL + tr(": Lade Inhalt von Pfad: ") + basePath);
+    sendLogText("FTP", tr("Loading index from"), basePath);
 
     #ifdef QT_DEBUG
-        qDebug() << "Get FTP index from path: " << basePath;
+        qDebug() << baseServerID << ": Get FTP index from path: " << basePath;
     #endif
 
     // setup ftp connects
@@ -313,12 +311,12 @@ void FTPListFiles::doListInfo(const QUrlInfo& info)
         if(basePath.endsWith("/"))
         {
             fileList.append(basePath + info.name() + "|" + QString::number(info.size()));
-            // sendLogText(baseSFDL + ": " + basePath + info.name() + " [" + QString::number(info.size()) + "]");
+            sendLogText("FTP", info.name(), QString::number(info.size()));
         }
         else
         {
             fileList.append(basePath + "/" + info.name() + "|" + QString::number(info.size()));
-            // sendLogText(baseSFDL + ": " + basePath + "/" + info.name() + " [" + QString::number(info.size()) + "]");
+            sendLogText("FTP", info.name(), QString::number(info.size()));
         }
     }
 
@@ -331,12 +329,12 @@ void FTPListFiles::doListInfo(const QUrlInfo& info)
         if(basePath.endsWith("/"))
         {
             pathList.append(basePath + info.name());
-            // sendLogText(baseSFDL + ": " + basePath + info.name() + " [Verzeichnis]");
+            sendLogText("FTP", info.name(), tr("[Verzeichnis]"));
         }
         else
         {
             pathList.append(basePath + "/" + info.name());
-            // sendLogText(baseSFDL + ": " + basePath + "/" + info.name() + " [Verzeichnis]");
+            sendLogText("FTP", info.name(), tr("[Verzeichnis]"));
         }
     }
 }
@@ -351,17 +349,19 @@ void FTPListFiles::isDone(bool)
     if(ftp->error())
     {
         #ifdef QT_DEBUG
-            qDebug() << "FTP Error: " << ftp->error();
-            qDebug() << "FTP ErrorString: " << ftp->errorString();
+            qDebug() << baseServerID << ": FTP Error: " << ftp->error();
+            qDebug() << baseServerID << ": FTP ErrorString: " << ftp->errorString();
         #endif
 
         // sendLogText(tr("<font color=\"red\">[") + baseSFDL + tr("] FTP Fehler: ") + ftp->errorString() + "</font>");
         // sendWarning(tr("FTP Fehler"), "[" + baseSFDL + "] " + ftp->errorString());
+
+        sendErrorMsg("FTP: " + baseSFDL + " > " + ftp->errorString());
     }
     else
     {
         #ifdef QT_DEBUG
-            qDebug() << "Alle FTP Operationen ohne Fehler beendet!";
+            qDebug() << baseServerID << ": Alle FTP Operationen ohne Fehler beendet!";
         #endif
     }
 }

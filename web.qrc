@@ -22,5 +22,15 @@
         <file>react/saugergui/build/static/js/main.ae491b51.js</file>
         <file>react/saugergui/build/static/js/main.ae491b51.js.LICENSE.txt</file>
         <file>react/saugergui/build/static/js/main.ae491b51.js.map</file>
+        <file>webui/build/asset-manifest.json</file>
+        <file>webui/build/favicon.ico</file>
+        <file>webui/build/index.html</file>
+        <file>webui/build/logo192.png</file>
+        <file>webui/build/logo512.png</file>
+        <file>webui/build/manifest.json</file>
+        <file>webui/build/robots.txt</file>
+        <file>webui/build/static/js/main.658b93e1.js</file>
+        <file>webui/build/static/js/main.658b93e1.js.LICENSE.txt</file>
+        <file>webui/build/static/js/main.658b93e1.js.map</file>
     </qresource>
 </RCC>

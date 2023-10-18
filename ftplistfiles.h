@@ -45,7 +45,8 @@ private slots:
 
 signals:
     void sendWarning(QString label, QString text);
-    void sendLogText(QString text);
+    void sendLogText(QString text1, QString text2, QString text3);
+    void sendErrorMsg(QString text);
     void sendFiles(int id, QStringList files);
     void finished();
 

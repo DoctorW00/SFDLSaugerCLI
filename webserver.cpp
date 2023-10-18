@@ -22,10 +22,37 @@ webserver::webserver(QObject *parent) : QTcpServer(parent)
 
 }
 
+void webserver::setHostIP(QString ip)
+{
+    hostIP = ip;
+}
+
+void webserver::setGUIpath(QString path)
+{
+    guiPath = path;
+}
+
+void webserver::setSSLUsage(bool option)
+{
+    sslUsage = option;
+}
+
+void webserver::setCerFile(QString location)
+{
+    sslCertFile = location;
+}
+
+void webserver::setKeyFile(QString location)
+{
+    sslKeyFile = location;
+}
+
 void webserver::startServer(qint16 port)
 {
     #ifdef QT_DEBUG
         qDebug() << "webserver::startServer port: " << port;
+        qDebug() << "webserver::startServer use ssl: " << sslUsage;
+        qDebug() << "webserver::startServer base path: " << guiPath;
     #endif
 
     if(!port && port < 65535)
@@ -34,9 +61,27 @@ void webserver::startServer(qint16 port)
     }
 
     // if(this->listen(QHostAddress::Any, port))
-    if(this->listen(QHostAddress("127.0.0.1"), port))
+    // if(this->listen(QHostAddress("127.0.0.1"), port))
+    if(this->listen(QHostAddress(hostIP), port))
     {
-        qDebug() << "WWW listening @: " << this->serverAddress().toString() << ":" << port;
+        QString serverIP = this->serverAddress().toString();
+        QString serverPort = QString::number(port);
+
+        qDebug() << "WWW listening @: " << serverIP << ":" << port;
+
+        QString serverLink;
+
+        if(sslUsage == true)
+        {
+            serverLink = "https://" + serverIP + ":" + serverPort;
+        }
+        else
+        {
+            serverLink = "http://" + serverIP + ":" + serverPort + "/";
+        }
+
+        qDebug() << "WWW open in browser: " << serverLink;
+
         openURL(port);
     }
     else
@@ -48,16 +93,29 @@ void webserver::startServer(qint16 port)
 void webserver::incomingConnection(qintptr socketDescriptor)
 {
     qDebug() << "WWW client connecting: " << socketDescriptor;
-
     auto thread = new webserverthread(socketDescriptor, this);
     // auto thread = new webserverthread(sslSocket->socketDescriptor(), this);
     connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
-    connect(thread, SIGNAL(error(QTcpSocket::SocketError)), this, SLOT(serverError(QTcpSocket::SocketError)));
+
+    if(sslUsage == true)
+    {
+        connect(thread, SIGNAL(error(QTcpSocket::SocketError)), this, SLOT(serverError(QTcpSocket::SocketError)));
+    }
+
     connect(thread, SIGNAL(socketError(QAbstractSocket::SocketError)), this, SLOT(serverError2(QAbstractSocket::SocketError)));
 
     qRegisterMetaType<QVector<QStringList>>("QVector<QStringList>");
     connect(thread, SIGNAL(sendSFDLUploads(QVector<QStringList>)), this, SLOT(handleSFDLUploads(QVector<QStringList>)));
 
+    // set custom base path for webserver
+    if(!guiPath.isEmpty())
+    {
+        thread->setServerBasePath(guiPath);
+    }
+
+    thread->setSSLUsage(sslUsage);
+    thread->setCerFile(sslCertFile);
+    thread->setKeyFile(sslKeyFile);
     thread->start();
 }
 
@@ -112,7 +170,16 @@ void webserver::handleSFDLUploads(QVector<QStringList> sfdlUploads)
 
 void webserver::openURL(qint16 port)
 {
-    QString URL = "https://127.0.0.1:" + QString::number(port) + "/";
+    QString URL;
+
+    if(sslUsage == true)
+    {
+        URL = "https://" + hostIP + ":" + QString::number(port) + "/";
+    }
+    else
+    {
+        URL = "http://" + hostIP + ":" + QString::number(port) + "/";
+    }
 
     // open url in browser (if windows)
     #ifdef Q_OS_WIN

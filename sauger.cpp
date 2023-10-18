@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QThread>
+#include <iostream>
 
 #ifdef Q_OS_WIN
     #include <windows.h>
@@ -27,8 +28,25 @@ QVector<dFile> Files;
 
 sauger::sauger(QObject *parent) : QObject(parent)
 {
-    // auto www = new webserver;
-    // connect(www, SIGNAL(sendSFDLFile(QString)), this, SLOT(sart(QString)));
+    cProgressbarLen = 10; // length (chars) of the progressbar (console output)
+
+    // activate ansi support for windows 10 console
+    #ifdef Q_OS_WIN
+        HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+        DWORD dwMode = 0;
+        GetConsoleMode(hConsole, &dwMode);
+        dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+        SetConsoleMode(hConsole, dwMode);
+
+        // set unicode font
+        HANDLE consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_FONT_INFOEX fontInfo;
+        fontInfo.cbSize = sizeof(CONSOLE_FONT_INFOEX);
+        GetCurrentConsoleFontEx(consoleHandle, FALSE, &fontInfo);
+        wcscpy_s(fontInfo.FaceName, L"Consolas");
+        SetCurrentConsoleFontEx(consoleHandle, FALSE, &fontInfo);
+        SetConsoleOutputCP(CP_UTF8);
+    #endif
 
     // set consol size
     QPair<int, int> consolsize = returnConsolSize();
@@ -39,6 +57,88 @@ sauger::sauger(QObject *parent) : QObject(parent)
         _consolCOL = cCol;
         _consolROW = cRow;
     }
+
+    pProgress = new QTimer(this);
+    connect(pProgress, SIGNAL(timeout()), this, SLOT(printDownloadProgress()));
+    // pProgress->start(1000);
+
+}
+
+void sauger::printGraf()
+{
+    QTextStream cout(stdout);
+    cout.setCodec("UTF-8");
+
+    QString asciiGraf = QString::fromUtf8(
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▓▓▓▒▒▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓███████████████████▓▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓███████▓▓▓▓███▓█▓▓███▓▓▓███▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓████████▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓█▓█████████▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓████▓▓█▓▓▓▓▓▓▓▓▓▓█████▓▓▒▓▓▓██▓▒▒▒▒▓███▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒████▓▓▓▓▓▓▓▒▒▒▒░░░░░░▒▒▓▓▓▒▒▒▓▓▓░░░░░░░▒▓██▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓████▓▓▓▓▓▒░░░░░░░░░░░░░░░░░▒▒▒▒▒░░░░░░░░░░░▒▓█▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓█▓▓▓▓▓▓▓▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░▓██▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░▒▒▒░▒▒▒▒▒▒▒▒▓▓█▓▓█▓▓▓▓▓▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒█▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░▒▒░▒▒▒░▒▓▓█▓▓▓▓▓▓▓▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒▓█▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░░░░▒▓▓██▓▓▓▓▓▓▒▒░░░░░░░░▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▓█▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░░░░▓▓████▓▓▓▓▒▒▒░░░░░░▒▒▒▒▒▒░░░░░▒░░░░░░░░░░░░░░▒▒▒▒▒▓▓▓▓▓▓▓▓▒▒░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░░░▒███▓▓▓███▓▓▒▒░░░░░▒▒▓▒▒▒▒▓▒▒▒▒▓▒▒▒▒▒▒░░░░░░░░░░▒▒▒▒▒▒▒▒▓▓▓▒▒░▒▒▒░▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░░░▓████▓▓▓▓▓▓▒▒▒░░░░░▓▓▓▒▒▓▓▒▒▒▒▒░░▒▒▒▒▒▒░░░░░░░░▒▒▒▒░░░░░░▒▓▒▒░▒░░▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░▒▒▓▓▓▓▓▓▒▓▓▓▒▒▒▒▒▒▒▒░▒▓▓▒▒▒▒░▒░░░░░░▒▒▒▒▒▒▒▒░░░░░▒▒▒▒▒▒▒▒▒▒░░▒▒▒▒▒▒░░▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░▒▓▓▓▓▓▓▓▓▒▒▒▒▒▒▒▒▒▒░░▓▓▒▒░░░░░░░▒▒▒▒▒▓▒▓▓▓▒░░░░░▓▓▓▒▒▒▒▓▓▓▒▒▒▓▒▒▒▒░▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░▒▒▒▓█▒▒▓▒▓▒░▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░▒▒▓▓▓▓▓▒▓▓▓▓▓▓▓▒░░░░▓▓▒██▓▒░▒▒░░▒▒▓▒▒▒▒░▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░▒▒░▒▒▒▒▓▒▒░▒▒▒░▒▒▒▒▒▒▒▒▒▒▒░░░▒▒▓▓▓▒░░▒▒▒▒▒▓▒▒▒░░░░░▒▒▓▓▓▒░░░░░░▒▓▒▒▒░▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░▒▒░▒▒░░▒▓▒▒░▒░▒▒▒▒▒▒▒▒▒▒░░░░░▒▒▓▓▓▓▒░░░░▒░▒▒▒▒░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░░░▒▒▒▒░▒░░▒░▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░▒░░░░░░░░░░░░░░░░░░░░▒▒▒█████▓▓▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░░▒▓▒░▒▒▒░▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░▒▓█████████▓▓▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░▒▓▓▒▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░▒▒░░░░░░░░░░░░░░░░░░▓█████████████▓▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░░▓██▓▒▓▓▒▒░▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░▒░░▒░░░░░░░░░░░░░░░░░░▓███████████████\033[0m\n"
+        "\033[47m\033[30m░░▒▒▓▓███████▓█▓▓▒▒░▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒░░░░░░░░▓▒░░░░░░░▓███████████████\033[0m\n"
+        "\033[47m\033[30m▒▓███████████▓███▓▓▓▒▒▒▒▒░▒░▒▒▒░░░░░░░░░░░░░░░░░░░░▓█████▓▓▒▒▒▒▒░░▓▒░░░░░░▒███████████████\033[0m\n"
+        "\033[47m\033[30m███████████████▓▓▓▓▓▓▒▒▒▒▒▒▒░▒▒░░░░░░░░░░░░░░░░░░░░░▒▒▒▓█████▓▒░░░▒▓▒░░░▒░▓███████████████\033[0m\n"
+        "\033[47m\033[30m███████████████▓▓▓██▓▓▓▓▓▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░▒▓███▒░░░░░▒▒░░░░░▓███████████████\033[0m\n"
+        "\033[47m\033[30m███████████████████▓███▓▓▓▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒░░▒▒░░░░░▓████████▓▓▓▓▓▓▓\033[0m\n"
+        "\033[47m\033[30m█████████████████████████▓▓▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░▒▒▓▓▓▓███████▒▒▒░░░░░██████▓▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m███████████████████▓██████▓▓▓▒▒▒▒▒▒░░░░░░░░░░░░▒▒▓▓███████████████▓▒▒░░░░▒▓▓█▓▓▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m██████████████████████████▓▓▓▓▓▒▒▒▒▒░░░░░░░░░▒▒▓███████████████▓▓▓▒▒░░░░░▒▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m████████████████████████████▓▓▓▓▓▒▒▒░░░░░░░░░▒████▓▓▓▒▒▒▒▒▒▒▒▓█▓▓▓░▒░░░░▒▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m███████████████████████████████▓▓▓▒▒▒░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▓▓▒░▒░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m█████████████████████████████████▓▓▒▒▒▒▒░░░░░░░▒▒▒▒▒▒▒░░░▒▒▒▒▒▒▓█▒░░▒▒░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m███████████████████████████████████▓▓▒▒▒▒▒░░░░░░░▒▓▓▒▓▓▒▒▒▒▓▓▓█▓▒░░░░▒░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▓▒▒▒▒▒▒▒▒▒▒▒▓███████████████████████▓▓▒▒▒▒▒░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m▒▒░░░░░▒░░▒░░████████▓▓██████████████▓▓▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░░░░▒▒░▒▒▓████████▓▓▓████████████▓▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░░░▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░░▒▒▒▒▒▒▒▒▓██████████▓▓▓███▓▓██████▓▒▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░░░▓███▓▓▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░░░░▒▒▒▒▒▒▓███████████████▓▓▓▓█▓▓▓▓█████▓▒▒▒▒▒▒▒░░░░░░░░░░░░░░░░░░░▒█████████▓▓▒▒▒▒▒▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░▒▒▒▒▒▒▓█████████████████████▓▓▓▓▓▓▓▓█████▓▓▒▒▒▓▓▒░░░░░░░░░░░░░░░░▒███████████████▓▓▒▒▒▒▒\033[0m\n"
+        "\033[47m\033[30m░░▒▒▓▓██████████████████████████▓▓▓▒▒▓████████▓▒▒▓█▓▓▒▒░░░░▒▒▒▒▒▒▓██████████████████████▓▓\033[0m\n"
+        "\033[47m\033[30m▒▓████████████████████████████████▓▓▒░▒▓▓▓▓██████▓▓█████▓▓▓▓██████████████████████████████\033[0m\n"
+        "\033[47m\033[30m████████████████████████████████████▓▓▒░▒▓▓▒▓█████████████████████████████████████████████\033[0m\n"
+        "\033[47m\033[30m███████████████████████████████████████▓▒▒▓▓▒░░▒▓█████████████████████████████████████████\033[0m\n"
+    );
+
+    // cout << "\033[47m\033[30m" << asciiGraf << "\033[0m" << endl;
+    cout << asciiGraf << endl;
+    cout.flush();
+}
+
+void sauger::printBanner()
+{
+    QTextStream cout(stdout);
+
+    cout << "\x1B[1;33m SFDLSaugerCLI \x1B[1;35m" << QString(APP_VERSION) << "\x1B[1;33m (GrafSauger)\x1B[1;32m" << R"(
+   _____ ______ _____  _       _____                              _____ _      _____
+  / ____|  ____|  __ \| |     / ____|                            / ____| |    |_   _|
+ | (___ | |__  | |  | | |    | (___   __ _ _   _  __ _  ___ _ __| |    | |      | |
+  \___ \|  __| | |  | | |     \___ \ / _` | | | |/ _` |/ _ \ '__| |    | |      | |
+  ____) | |    | |__| | |____ ____) | (_| | |_| | (_| |  __/ |  | |____| |____ _| |_
+ |_____/|_|    |_____/|______|_____/ \__,_|\__,_|\__, |\___|_|   \_____|______|_____|
+                                                  __/ |
+                                                 |___/
+ )" << "\x1B[0m" << endl;
+
+
+    cout.flush();
 }
 
 void sauger::printConsol(QString text)
@@ -48,11 +148,103 @@ void sauger::printConsol(QString text)
     cout.flush();
 }
 
-void sauger::printPlain(QString text)
+void sauger::printError(QString text)
 {
     QTextStream cout(stdout);
-    cout << text << endl;
+    cout << "\x1B[1;31m[ERROR] " + text + "\x1B[0m" << endl;
     cout.flush();
+}
+
+void sauger::printStausText(QString text1, QString text2, QString text3)
+{
+    QTextStream cout(stdout);
+    cout << "\x1B[1;32m[" + text1 + "] \x1B[1;36m" + text2 + " \x1B[1;35m " + text3 + "\x1B[0m" << endl;
+    cout.flush();
+}
+
+void sauger::printPlain(QString text, QString color)
+{
+    QTextStream cout(stdout);
+
+    if(color == "red")
+    {
+        cout << "\x1B[1;31m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "yellow")
+    {
+        cout << "\x1B[1;33m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "green ")
+    {
+        cout << "\x1B[1;32m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "blue ")
+    {
+        cout << "\x1B[1;34m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "white")
+    {
+        cout << "\x1B[1;37m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "magenta")
+    {
+        cout << "\x1B[1;35m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "cyan")
+    {
+        cout << "\x1B[1;36m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "purple")
+    {
+        cout << "\x1B[1;35m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "brown")
+    {
+        cout << "\x1B[1;33m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "gray")
+    {
+        cout << "\x1B[1;30m" + text + "\x1B[0m" << endl;
+    }
+    else if(color == "lightgrey")
+    {
+        cout << "\x1B[1;37m" + text + "\x1B[0m" << endl;
+    }
+    else
+    {
+        cout << " " << text << endl;
+    }
+
+    cout.flush();
+}
+
+void sauger::printFileProgress(QString fileName, qint64 loaded, qint64 total, int percent)
+{
+    QTextStream cout(stdout);
+    cout.setCodec("UTF-8");
+
+    cout << "\x1B[1;33m" + fitMyString(fileName) + " \x1B[0m" + returnProgressBar(percent, cProgressbarLen) + " \x1B[1;31m(\x1B[1;36m" + bytes2Human(loaded) + "\x1B[1;31m/\x1B[1;36m" + bytes2Human(total) + "\x1B[1;31m) \x1B[1;32m" +  QString::number(percent) + "%\x1B[0m " << endl;
+    cout.flush();
+}
+
+// shorten string to fit console size
+QString sauger::fitMyString(QString text)
+{
+    int maxLen = _consolCOL - 35;
+
+    if (text.length() <= maxLen)
+    {
+        return text;
+    }
+
+    int remainingChars = maxLen - 3;
+    int leftHalfLength = remainingChars / 2;
+    int rightHalfLength = remainingChars - leftHalfLength;
+
+    QString leftHalf = text.left(leftHalfLength);
+    QString rightHalf = text.right(rightHalfLength);
+
+    return leftHalf + "..." + rightHalf;
 }
 
 QPair<int, int> sauger::returnConsolSize()
@@ -121,6 +313,190 @@ void sauger::sart(QString sfdlFileName)
     thread->start();
 }
 
+QString sauger::seconds_to_DHMS(int duration)
+{
+    QString res;
+    int seconds = (int) (duration % 60);
+    duration /= 60;
+    int minutes = (int) (duration % 60);
+    duration /= 60;
+    int hours = (int) (duration % 24);
+    int days = (int) (duration / 24);
+    if((hours == 0)&&(days == 0)&&(minutes == 0))
+    {
+        return res.sprintf("%02ds", seconds);
+    }
+    else if((hours == 0)&&(days == 0))
+    {
+        return res.sprintf("%02dm %02ds", minutes, seconds);
+    }
+    else if (days == 0)
+    {
+        return res.sprintf("%02dh %02dm %02ds", hours, minutes, seconds);
+    }
+    else
+    {
+        return res.sprintf("%ddt %02dh %02dm %02ds", days, hours, minutes, seconds);
+    }
+}
+
+QString sauger::bytes2Human(float filesize)
+{
+    float num = filesize;
+
+    QStringList list;
+    list << "KiB" << "MiB" << "GiB" << "TiB";
+
+    QStringListIterator i(list);
+    QString unit("bytes");
+
+    while(num >= 1024.0 && i.hasNext())
+    {
+        unit = i.next();
+        num /= 1024.0;
+    }
+    return QString().setNum(num,'f',2) + " " + unit;
+}
+
+void sauger::clearConsole()
+{
+    std::cout << "\033[2J";
+    std::cout << "\033[H";
+    std::cout.flush();
+}
+
+QString sauger::returnProgressBar(int progress, int len)
+{
+    QString progressBar = "";
+    int pBarLen = 0;
+    int pBarPat = 0;
+
+    if(progress > 0)
+    {
+        pBarLen = (progress * len) / 100;
+
+        if(pBarLen > len)
+        {
+            pBarLen = len;
+        }
+
+        pBarPat = len - pBarLen;
+
+        for(int i = 0; i < pBarLen; i++)
+        {
+            progressBar.append(QString::fromUtf8("█"));
+        }
+
+        if(pBarPat >= 1)
+        {
+            for(int j = 0; j < pBarPat; j++)
+            {
+                progressBar.append(QString::fromUtf8("░"));
+            }
+        }
+    }
+    else
+    {
+        for(int i = 0; i < len; i++)
+        {
+            progressBar.append(QString::fromUtf8("░"));
+        }
+    }
+
+    return progressBar;
+}
+
+int sauger::returnPercent(qint64 read, qint64 total)
+{
+    int progress;
+
+    if(total < 100)
+    {
+       progress = 100;
+    }
+    else
+    {
+        progress = read/(total/100);
+    }
+
+    if(progress > 100)
+    {
+        progress = 100;
+    }
+
+    return progress;
+}
+
+void sauger::printDownloadProgress()
+{
+    clearConsole();
+    printBanner();
+    // printGraf();
+
+    for(auto i = Servers.begin(); i != Servers.end(); ++i)
+    {
+        if(i->status == 1)
+        {
+            printFileProgress(i->name, i->loaded, i->total, returnPercent(i->loaded, i->total));
+
+            for(auto j = Files.begin(); j != Files.end(); j++)
+            {
+                if(j->status == 1 && j->dServerID == i->id)
+                {
+                    printFileProgress(j->fileName, j->loaded, j->total, returnPercent(j->loaded, j->total));
+                }
+            }
+        }
+    }
+}
+
+// get server index by id
+int sauger::getServerIndexByID(int serverID)
+{
+    int c = 0;
+    for(auto i = Servers.begin(); i != Servers.end(); i++)
+    {
+        if(i->id == serverID)
+        {
+            break;
+        }
+        c++;
+    }
+
+    return c;
+}
+
+// get file index by id
+int sauger::getFileIndexByID(int fileID)
+{
+    int c = 0;
+    for(auto i = Files.begin(); i != Files.end(); i++)
+    {
+        if(i->id == fileID)
+        {
+            break;
+        }
+        c++;
+    }
+
+    return c;
+}
+
+// return clean path and file from file full path
+QStringList sauger::dirFromFilePath(QString filePath)
+{
+    QRegularExpression regex("[/\\\\]");
+    QStringList pathParts = filePath.split(regex);
+    QString fileName = pathParts.last();
+    QString cleanPath = filePath.left(filePath.length() - fileName.length());
+
+    QStringList result;
+    result.append(cleanPath);
+    result.append(fileName);
+
+    return result;
+}
+
 void sauger::receiveFTPFileIndex(int id, QStringList files)
 {
     #ifdef QT_DEBUG
@@ -160,7 +536,7 @@ void sauger::receiveFTPFileIndex(int id, QStringList files)
 
             totalDownloadSize = totalDownloadSize + fileSize;
 
-            Files.append({FileID, id, filename, filepath, cleanpath, subDirs, 0, fileSize, 0, 0, 0, 0});
+            Files.append({FileID, id, filename, filepath, cleanpath, subDirs, 0, fileSize, 0, 0, 0, 0, true});
         }
     }
 
@@ -196,6 +572,7 @@ void sauger::receiveFTPFileIndex(int id, QStringList files)
             qDebug() << var.cleanPath;
             qDebug() << var.subDirs;
             qDebug() << var.total;
+            qDebug() << var.selected;
             qDebug() << "----------------------------";
         }
     #endif
@@ -219,12 +596,19 @@ void sauger::getSFDLData(QStringList data, QStringList files)
         QString name = data.at(1).split("|").at(1);
         QString path = data.at(21).split("|").at(1);
         QString ip = data.at(7).split("|").at(1);
-        qint16 port = data.at(8).split("|").at(1).toShort();
+        int port = data.at(8).split("|").at(1).toInt();
         QString user = data.at(9).split("|").at(1);
         QString pass = data.at(10).split("|").at(1);
 
         #ifdef QT_DEBUG
             qDebug() << "ServerID: " << ServerID;
+            qDebug() << "sfdl: " << sfdl;
+            qDebug() << "name: " << name;
+            qDebug() << "path: " << path;
+            qDebug() << "ip: " << ip;
+            qDebug() << "port: " << port;
+            qDebug() << "user: " << user;
+            qDebug() << "pass: " << pass;
         #endif
 
         Servers.append({ServerID, sfdl, name, path, ip, port, user, pass, 0, 0, 0, 0, 0, 0});
@@ -232,7 +616,8 @@ void sauger::getSFDLData(QStringList data, QStringList files)
 
     if(!files.count())
     {
-        printConsol(tr("Loading file index from FTP server ..."));
+        // printConsol(tr("Loading file index from FTP server ..."));
+        printStausText("SFDL", tr("Loading file index from FTP"), data.at(1).split("|").at(1));
 
         QStringList downloadList;
         downloadList.append(QString::number(ServerID));    // server id
@@ -252,7 +637,9 @@ void sauger::getSFDLData(QStringList data, QStringList files)
         connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
         connect(thread, SIGNAL(started()), listFTP, SLOT(process()));
 
-        connect(listFTP, SIGNAL(sendLogText(QString)), this, SLOT(printConsol(QString)));
+        connect(listFTP, SIGNAL(sendLogText(QString,QString,QString)), this, SLOT(printStausText(QString,QString,QString)));
+        connect(listFTP, SIGNAL(sendErrorMsg(QString)), this, SLOT(printError(QString)));
+
         connect(listFTP, SIGNAL(sendFiles(int, QStringList)), this, SLOT(receiveFTPFileIndex(int, QStringList)));
 
         thread->start();
@@ -265,81 +652,236 @@ void sauger::getSFDLData(QStringList data, QStringList files)
             receiveFTPFileIndex(ServerID, files);
         }
     }
-
-    /*
-    #ifdef QT_DEBUG
-        qDebug() << "files list: " << files;
-    #endif
-
-    if(!files.count())
-    {
-        printConsol("Error: There are no files to download!");
-        exit(1);
-    }
-
-    _data = data;
-    _files = files;
-
-    startDownload();
-    */
-
 }
 
 void sauger::startDownload()
 {
+    #ifdef QT_DEBUG
+        qDebug() << "startDownload ... (" << _runningDownloads << "|" << _MaxDownloadThreads << ")";
+    #endif
 
-    qDebug() << "startDownload!";
-
-    /*
     if(_runningDownloads < _MaxDownloadThreads)
     {
-        for(int i = 0; i < _files.count(); i++)
+        // get files to download
+        for(auto i = Servers.begin(); i != Servers.end(); ++i)
         {
-            if(_runningDownloads >= _MaxDownloadThreads)
-            {
-                break;
+           if(i->status != 10) // 10 = all done
+           {
+               for(auto j = Files.begin(); j != Files.end(); ++j)
+               {
+                   if(j->dServerID == i->id)
+                   {
+                       if(j->status != 10 && j->status != 9 && j->status != 2)
+                       {
+                           if(_runningDownloads >= _MaxDownloadThreads)
+                           {
+                                #ifdef QT_DEBUG
+                                    qDebug() << "break: " << _runningDownloads << _MaxDownloadThreads;
+                                #endif
+
+                               break;
+                           }
+
+                           QStringList downloadList;
+                           downloadList.append(QString::number(i->id));   // server id
+                           downloadList.append(QString::number(j->id));   // file id
+                           downloadList.append(i->ip);                    // host
+                           downloadList.append(QString::number(i->port)); // port
+                           downloadList.append(i->user);                  // user
+                           downloadList.append(i->pass);                  // pass
+
+                           downloadList.append(dirFromFilePath(j->fullFilePath).at(0));  // ftp dir
+
+                           // set local download path
+                           QString fullDownloadPath = _DownloadDestination + i->name;
+                           if(!fullDownloadPath.endsWith("/"))
+                           {
+                               fullDownloadPath = _DownloadDestination + i->name + "/";
+                           }
+
+                           QString fileSubPath = j->subDirs;
+
+                           if(!fileSubPath.isEmpty())
+                           {
+                               if(fileSubPath.endsWith("/"))
+                               {
+                                  fullDownloadPath = fullDownloadPath + fileSubPath;
+                               }
+                               else
+                               {
+                                   fullDownloadPath = fullDownloadPath + fileSubPath + "/";
+                               }
+                           }
+
+                           // create local download path (if needed)
+                           QDir dir;
+                           if(!dir.mkpath(fullDownloadPath))
+                           {
+                                #ifdef QT_DEBUG
+                                    qDebug() << "error: can't create download path: " << fullDownloadPath;
+                                #endif
+
+                               break;
+                           }
+
+                           downloadList.append(fullDownloadPath);                        // download path
+                           downloadList.append(dirFromFilePath(j->fullFilePath).at(1));  // file
+
+                           auto thread = new QThread;
+                           auto worker = new FTPDownload(downloadList);
+                           worker->moveToThread(thread);
+                           g_Worker.append(worker);
+
+                           connect(worker, SIGNAL(doProgress(int,int,qint64,qint64,bool,bool)), this, SLOT(updateDownloadProgress(int,int,qint64,qint64,bool,bool)));
+                           connect(worker, SIGNAL(statusUpdateFile(int,int)), this, SLOT(updateDownloadFileStatus(int,int)));
+
+                           connect(worker, SIGNAL(error(QString)), this, SLOT(downloadError(QString)));
+
+                           connect(thread, SIGNAL(started()), worker, SLOT(process()));
+                           connect(worker, SIGNAL(finished()), thread, SLOT(quit()));
+                           connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
+                           connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
+
+                           thread->start();
+
+                           Servers[getServerIndexByID(i->id)].status = 1;
+                           Files[getFileIndexByID(j->id)].status = 1;
+
+                           _runningDownloads++;
+
+                           #ifdef QT_DEBUG
+                               qDebug() << "new download thread for: " << j->fileName << _runningDownloads << _MaxDownloadThreads;
+                           #endif
+
+                           // start progress output timer
+                           pProgress->start(1000);
+
+                        }
+                    }
+                }
             }
-
-            QStringList downloadList;
-            downloadList.append(_data.at(7).split("|").at(1));
-            downloadList.append(_data.at(8).split("|").at(1).toInt());
-            downloadList.append(_data.at(9).split("|").at(1));
-            downloadList.append(_data.at(10).split("|").at(1));
-            downloadList.append(_data.at(21).split("|").at(1));
-
-            auto thread = new QThread;
-            auto worker = new FTPDownload(downloadList);
-            worker->moveToThread(thread);
-            g_Worker.append(worker);
-
-            connect(worker, SIGNAL(doProgress(QString,int,qint64,qint64,bool,bool)), this, SLOT(updateDownloadProgress(QString,int,qint64,qint64,bool,bool)));
-            connect(worker, SIGNAL(statusUpdateFile(QString,int,QString,int)), this, SLOT(updateDownloadFileStatus(QString,int,QString,int)));
-            connect(worker, SIGNAL(error(QString)), this, SLOT(downloadError(QString)));
-            connect(thread, SIGNAL(started()), worker, SLOT(process()));
-            connect(worker, SIGNAL(finished()), thread, SLOT(quit()));
-            connect(worker, SIGNAL(finished()), worker, SLOT(deleteLater()));
-            connect(thread, SIGNAL(finished()), thread, SLOT(deleteLater()));
-
-            thread->start();
-
-            _runningDownloads++;
         }
     }
-    */
 }
 
-void sauger::setData(QString sfdlFile, QString downloadPath, int maxThreads, bool forceOverwrite, QString password)
+// stop all downloads
+void sauger::stopDownload()
+{
+    // stop progress output timer
+    pProgress->stop();
+
+    foreach(FTPDownload* w, g_Worker)
+    {
+        if(w->_working && w->thread()->isRunning())
+        {
+            updateDownloadFileStatus(w->fileID, 9); // fileID
+
+            int serverIndex = getServerIndexByID(w->serverID);
+            Servers[serverIndex].status = 9; // set server status
+
+            w->ftp->abort();
+            w->ftp->thread()->quit();
+            w->ftp->thread()->wait();
+            w->ftp->deleteLater();
+            w->abort();
+            w->thread()->quit();
+            w->thread()->wait();
+            w->deleteLater();
+
+            _runningDownloads--;
+        }
+    }
+}
+
+void sauger::downloadError(QString error)
+{
+    printError("FTP: " + error);
+}
+
+
+// update progress on downloads
+void sauger::updateDownloadProgress(int serverID, int fileID, qint64 read, qint64 total, bool overwriteTime, bool firstUpdate)
+{
+    overwriteTime;
+    firstUpdate;
+
+    // set file download progress
+    int fileIndex = getFileIndexByID(fileID);
+    // qint64 lastFileProgress = Files.at(fileIndex).progress;
+    qint64 lastFileProgress = Files.at(fileIndex).loaded;
+    qint64 fileProgressNew = read - lastFileProgress;
+
+    // set precetage for progressbars
+    Files[fileIndex].progress = returnPercent(read, total);
+
+    if(fileProgressNew > 0)
+    {
+        // Files[fileIndex].progress += fileProgressNew;
+        Files[fileIndex].loaded += fileProgressNew;
+    }
+
+    // set server download progress
+    if(fileProgressNew > 0)
+    {
+        int serverIndex = getServerIndexByID(serverID);
+        // qint64 serverProgress = Servers.at(serverIndex).progress;
+        qint64 serverProgress = Servers.at(serverIndex).loaded;
+        qint64 serverProgressNew = 0;
+
+        serverProgressNew = serverProgress + fileProgressNew;
+        // Servers[serverIndex].progress = serverProgressNew;
+        Servers[serverIndex].loaded = serverProgressNew;
+
+        // set precetage for progressbars
+        Servers[serverIndex].progress = returnPercent(Servers[serverIndex].loaded, Servers[serverIndex].total);
+    }
+}
+
+// update file status
+void sauger::updateDownloadFileStatus(int fileID, int status)
+{
+    int fileIndex = getFileIndexByID(fileID);
+    Files[fileIndex].status = status;
+
+    #ifdef QT_DEBUG
+        qDebug() << "updateDownloadFileStatus fileID: " << fileID;
+        qDebug() << "updateDownloadFileStatus status: " << status;
+        qDebug() << "updateDownloadFileStatus fileName: " << Files.at(fileIndex).fileName;
+        qDebug() << "updateDownloadFileStatus _runningDownloads: " << _runningDownloads;
+    #endif
+
+    // if(status == 9 || status == 10)
+    if(status > 1)
+    {
+        _runningDownloads--;
+
+        #ifdef QT_DEBUG
+            qDebug() << "updateDownloadFileStatus _runningDownloads-2: " << _runningDownloads;
+        #endif
+
+        startDownload();
+    }
+}
+
+bool sauger::setData(QString sfdlFile, QString downloadPath, int maxThreads, bool forceOverwrite, QString password)
 {
     int errors = 0;
     _SFDLFile = sfdlFile;
+
+    if(!downloadPath.endsWith("/"))
+    {
+        downloadPath = downloadPath + "/";
+    }
+
     _DownloadDestination = downloadPath;
     _MaxDownloadThreads = maxThreads;
+    _runningDownloads = 0;
     _ForceOverwirteFiles = forceOverwrite;
     _SFDLPassword = password;
 
     if(_SFDLFile.isEmpty())
     {
-        printConsol(tr("Error: No SFDL file set!"));
+        printError(tr("No SFDL file set!"));
         errors++;
     }
     else
@@ -347,7 +889,7 @@ void sauger::setData(QString sfdlFile, QString downloadPath, int maxThreads, boo
         QFile file(_SFDLFile);
         if(!file.exists())
         {
-            printConsol(tr("Error: SFDL file <") + _SFDLFile + tr("> does not exist!"));
+            printError(tr("SFDL file <") + _SFDLFile + tr("> does not exist!"));
             errors++;
         }
     }
@@ -357,23 +899,25 @@ void sauger::setData(QString sfdlFile, QString downloadPath, int maxThreads, boo
         QFileInfo dPath(_DownloadDestination);
         if(!dPath.exists())
         {
-            printConsol(tr("Error: Destination directory <") + dPath.absoluteFilePath() + tr("> does not exist!"));
+            printError(tr("Destination directory <") + dPath.absoluteFilePath() + tr("> does not exist!"));
             errors++;
         }
-        else if(!dPath.isDir())
+
+        if(!dPath.isDir())
         {
-            printConsol(tr("Error: Destination <") + dPath.absoluteFilePath() + tr("> is not a directory!"));
+            printError(tr("Destination <") + dPath.absoluteFilePath() + tr("> is not a directory!"));
             errors++;
         }
-        else if(!dPath.isWritable())
+
+        if(!dPath.isWritable())
         {
-            printConsol(tr("Error: Destination directory <") + dPath.absoluteFilePath() + tr("> is not writeable!"));
+            printError(tr("Destination directory <") + dPath.absoluteFilePath() + tr("> is not writeable!"));
             errors++;
         }
     }
     else
     {
-        printConsol(tr("Error: Destination directory is not set!"));
+        printError(tr("Destination directory is not set!"));
         errors++;
     }
 
@@ -389,8 +933,11 @@ void sauger::setData(QString sfdlFile, QString downloadPath, int maxThreads, boo
 
     if(errors)
     {
-        exit(errors);
+        // exit(errors);
+        return true;
     }
+
+    return false;
 }
 
 void sauger::setProxy(QString proxyHost, int proxyPort, QString proxyUser, QString proxyPass)

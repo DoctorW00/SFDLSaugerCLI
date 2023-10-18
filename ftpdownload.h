@@ -8,6 +8,8 @@
 #include <QTcpSocket>
 #include <QEventLoop>
 #include <QNetworkProxy>
+#include <QDir>
+#include <QTimer>
 
 #ifdef QT_DEBUG
     #include <QDebug>
@@ -26,6 +28,8 @@ public:
     int _tableRow = -1;
     QString _id;
     QFtp *ftp;
+    int serverID;
+    int fileID;
 
 public slots:
     void process();
@@ -34,19 +38,24 @@ private slots:
     void isDone(bool);
     void updateProgress(qint64, qint64);
     void finishedDownload();
+    void ftpTimeout();
+    void ftpRawCommandReply(int code, const QString & cmd);
+    void ftpCommandStarted(int id);
+    void ftpCommandFinished(int, bool error);
+    void ftpstateChanged(int state);
 
 signals:
     void finished();
     void error(QString err);
-    void statusUpdateFile(QString id, int tableRow, QString statusMsg, int status);
-    void doProgress(QString id, int tableRow, qint64 read, qint64 total, bool overwriteTime, bool firstUpdate);
+    void statusUpdateFile(int fileID, int status);
+    void doProgress(int serverID, int fileID, qint64 read, qint64 total, bool overwriteTime, bool firstUpdate);
 
 private:
+    QTimer *timer;
     QStringList data;
     QFile *file;
     QEventLoop *ftpLoop;
     QMutex mutex;
-    QString id;
     QString host;
     QString port;
     QString user;
