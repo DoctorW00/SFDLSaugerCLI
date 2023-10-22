@@ -137,7 +137,7 @@ void websocket::start(qint16 port)
     // if(server->listen(QHostAddress("127.0.0.1"), port))
     if(server->listen(QHostAddress(hostIP), port))
     {
-        qDebug() << "WS server started " << hostIP << ":" << port;
+        qDebug() << "WS server started " << hostIP << ":" << port << " (SSL " << sslUsage << ")";
     }
     else
     {

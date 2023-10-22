@@ -205,9 +205,11 @@ int main(int argc, char *argv[])
         // websocket server
         auto ws = new websocket;
 
+        ws->setSSLUsage(sslTrueOrFalse);
+
         if(!parser.value(wwwSSLCert).isEmpty())
         {
-            www->setCerFile(parser.value(wwwSSLCert));
+            ws->setCerFile(parser.value(wwwSSLCert));
         }
 
         if(!parser.value(wwwSSLKey).isEmpty())

@@ -8,9 +8,7 @@
 #include <QSslCertificate>
 #include <QSslKey>
 
-#ifdef QT_DEBUG
-    #include <QDebug>
-#endif
+#include <QDebug>
 
 #include <QByteArray>
 #include <QTextStream>

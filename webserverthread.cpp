@@ -353,6 +353,10 @@ void webserverthread::processData(QString socketData)
 
 void webserverthread::readLineFromSocket(QIODevice* device)
 {
+    #ifdef QT_DEBUG
+        qDebug() << "WWW readLineFromSocket: " << device;
+    #endif
+
     if (device == socket && socket->canReadLine())
     {
         QString line = socket->readLine();
